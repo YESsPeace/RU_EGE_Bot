@@ -6,7 +6,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from config import dp, password, bot
 
 from data_base import sql_read, sql_add_command
-from keyboards import kb_admin, choose_type_kb
+from keyboards import kb_admin, add_db_choose_type_kb, check_db_choose_type_kb
 
 
 class FSMAdmin(StatesGroup):
@@ -64,39 +64,36 @@ async def load_start(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['type'] = 'choosing'
 
-    await choose_problem_type(message)
-
-
-async def choose_problem_type(message):
-    await message.answer('Выберите тип задачи:', reply_markup=choose_type_kb)
+    await message.answer('Выберите тип задачи:', reply_markup=add_db_choose_type_kb)
 
 
 # callback func if button call any 'type_' like 'type_15'
-@dp.callback_query_handler(lambda c: c.data.startswith('type_'), state=FSMAdmin.admin)
+@dp.callback_query_handler(lambda c: c.data.startswith('add_db_type_'), state=FSMAdmin.admin)
 async def process_callback_type(callback_query: types.CallbackQuery, state: FSMContext):
-    selected_type = callback_query.data.split('_')[1]  # get button call data
+    selected_type = callback_query.data.split('_')[-1]  # get button call data
 
     await bot.answer_callback_query(callback_query.id, text=f'Выбран тип задачи {selected_type}')
 
     await bot.send_message(callback_query.from_user.id, text=f'Выбран тип задачи {selected_type}')
 
     async with state.proxy() as data:
-        # if started add_problem command
-        if data:
-            data['type'] = 'problem_type_' + selected_type
+        data['type'] = 'problem_type_' + selected_type
 
-            await get_problem_text(callback_query)
+        await get_problem_text(callback_query)
 
-        # if started check_database command
-        else:
-            await sql_read(bot, callback_query, type='problem_type_' + selected_type)
 
-            await FSMAdmin.admin.set()
+@dp.callback_query_handler(lambda c: c.data.startswith('check_db_type_'), state=FSMAdmin.admin)
+async def process_callback_type(callback_query: types.CallbackQuery):
+    selected_type = callback_query.data.split('_')[-1]  # get button call data
+
+    await sql_read(bot, callback_query, type='problem_type_' + selected_type)
+
+    await FSMAdmin.admin.set()
 
 
 async def get_problem_text(callback_query):
-    await bot.send_message(callback_query.from_user.id, text='Введите текст задания.\n' +
-                                                             'cancel - для выхода')
+    await bot.send_message(callback_query.from_user.id, text='Введите текст задания.\n\n' +
+                                                             '/cancel - для выхода')
     await FSMAdmin.problem.set()
 
 
@@ -105,8 +102,8 @@ async def load_problem(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['problem'] = message.text
     await FSMAdmin.next()
-    await message.answer('Введите ответ к заданию.\n' +
-                         'cancel - для выхода')
+    await message.answer('Введите ответ к заданию.\n\n' +
+                         '/cancel - для выхода')
 
 
 @dp.message_handler(state=FSMAdmin.solution)
@@ -117,11 +114,16 @@ async def load_solution(message: types.Message, state: FSMContext):
 
         if message.text == '/done':
             await add_to_database(message, state)
+
+            await FSMAdmin.admin.set()
+
+            await message.answer('Выберите новый тип задачи:', reply_markup=add_db_choose_type_kb)
+
             return
 
         data['solution'].append(message.text)
 
-    await message.answer('Если есть ещё один вариант ответа, то введите его.\n' +
+    await message.answer('Если есть ещё один вариант ответа, то введите его.\n\n' +
                          'Если - нет, то введите /done')
 
 
@@ -147,7 +149,7 @@ async def add_to_database(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['check_database'], state=FSMAdmin.admin)
 async def database_read(message: types.Message):
-    await choose_problem_type(message)
+    await message.answer('Выберите тип задачи:', reply_markup=check_db_choose_type_kb)
 
 
 def register_handlers_admin(dp: Dispatcher):
