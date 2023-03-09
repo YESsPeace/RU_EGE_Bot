@@ -56,8 +56,8 @@ async def select_random_problem(type):
 
     # Получение случайной задачи
     row = cur.fetchone()
-
+    
     # Преобразование задачи в словарь
-    problem = {"id": row[0], "problem_text": row[1], "solution": row[2], "type": f'{type}'}
+    problem = {"id": row[0], "problem_text": row[1], "solution": json.loads(row[2]), "type": f'{type}'}
 
     return problem, max_number_of_problems
